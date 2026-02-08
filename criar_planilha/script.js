@@ -1,51 +1,112 @@
-// Dados do sistema
-let projetos = JSON.parse(localStorage.getItem('qa_projetos_v3')) || [];
-let projetoAtualId = null;
+// ====================================
+// DADOS DO SISTEMA
+// ====================================
+let projetos = JSON.parse(localStorage.getItem('qa_projetos_v4')) || [];
+let historico = JSON.parse(localStorage.getItem('qa_historico')) || [];
+let templates = JSON.parse(localStorage.getItem('qa_templates')) || [];
+let configuracoes = JSON.parse(localStorage.getItem('qa_configuracoes')) || {
+    emailNotifications: true,
+    testAlerts: true,
+    errorNotifications: true,
+    animations: true,
+    confirmDispatch: true,
+    dispatchDelay: 500
+};
 
-// Inicialização
+let projetoAtualId = null;
+let modoEdicao = false;
+let filtroAtual = 'all';
+
+// ====================================
+// INICIALIZAÇÃO
+// ====================================
 document.addEventListener('DOMContentLoaded', function() {
+    carregarConfiguracoes();
     renderizarProjetos();
     atualizarEstatisticas();
     configurarEventos();
+    atualizarContadorNotificacoes();
     
     // Atualizar contador de projetos na sidebar
     document.getElementById('project-count').textContent = projetos.length;
     
-    // Configurar toggle do menu mobile
+    // Menu mobile
     document.getElementById('menu-toggle').addEventListener('click', function() {
         document.querySelector('.sidebar').classList.toggle('active');
     });
     
-    // Configurar busca
+    // Busca com debounce
+    let searchTimeout;
     document.getElementById('search-input').addEventListener('input', function(e) {
-        filtrarProjetos(e.target.value);
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            filtrarProjetos(e.target.value);
+        }, 300);
     });
 });
 
-// Configuração de eventos
+// ====================================
+// CONFIGURAÇÃO DE EVENTOS
+// ====================================
 function configurarEventos() {
     // Fechar modal ao clicar fora
     window.addEventListener('click', function(event) {
-        const modal = document.getElementById('modal-projeto');
-        if (event.target == modal) {
-            fecharModal();
+        if (event.target.classList.contains('modal-overlay')) {
+            fecharTodosModais();
         }
     });
     
-    // Toggle do tema escuro
-    document.getElementById('dark-mode-toggle').addEventListener('change', function() {
-        document.body.classList.toggle('dark-mode');
-        mostrarToast('Tema alterado com sucesso!', 'success');
+    // Fechar sidebar mobile ao clicar no conteúdo
+    document.querySelector('.main-content').addEventListener('click', function() {
+        if (window.innerWidth <= 1024) {
+            document.querySelector('.sidebar').classList.remove('active');
+        }
     });
 }
 
-// --- Navegação ---
+function carregarConfiguracoes() {
+    document.getElementById('email-notifications').checked = configuracoes.emailNotifications;
+    document.getElementById('test-alerts').checked = configuracoes.testAlerts;
+    document.getElementById('error-notifications').checked = configuracoes.errorNotifications;
+    document.getElementById('animations-toggle').checked = configuracoes.animations;
+    document.getElementById('confirm-dispatch').checked = configuracoes.confirmDispatch;
+    document.getElementById('dispatch-delay').value = configuracoes.dispatchDelay;
+    
+    // Aplicar tema escuro se salvo
+    if (localStorage.getItem('dark-mode') === 'true') {
+        document.body.classList.add('dark-mode');
+        document.getElementById('dark-mode-toggle').checked = true;
+    }
+}
+
+function salvarConfiguracoes() {
+    configuracoes = {
+        emailNotifications: document.getElementById('email-notifications').checked,
+        testAlerts: document.getElementById('test-alerts').checked,
+        errorNotifications: document.getElementById('error-notifications').checked,
+        animations: document.getElementById('animations-toggle').checked,
+        confirmDispatch: document.getElementById('confirm-dispatch').checked,
+        dispatchDelay: parseInt(document.getElementById('dispatch-delay').value)
+    };
+    
+    localStorage.setItem('qa_configuracoes', JSON.stringify(configuracoes));
+    mostrarToast('Configurações salvas com sucesso!', 'success');
+}
+
+function toggleDarkMode() {
+    document.body.classList.toggle('dark-mode');
+    const isDark = document.body.classList.contains('dark-mode');
+    localStorage.setItem('dark-mode', isDark);
+    mostrarToast(`Tema ${isDark ? 'escuro' : 'claro'} ativado`, 'success');
+}
+
+// ====================================
+// NAVEGAÇÃO
+// ====================================
 function irParaHome(e) {
     if (e) e.preventDefault();
-    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-    document.getElementById('screen-dashboard').classList.add('active');
-    document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
-    document.querySelectorAll('.nav-item')[0].classList.add('active');
+    mostrarTela('screen-dashboard');
+    ativarNavItem(0);
     renderizarProjetos();
     atualizarEstatisticas();
 }
@@ -53,38 +114,429 @@ function irParaHome(e) {
 function irParaPlanilhaLista(e) {
     if (e) e.preventDefault();
     irParaHome();
-    document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
-    document.querySelectorAll('.nav-item')[1].classList.add('active');
+    ativarNavItem(1);
+}
+
+function mostrarHistorico(e) {
+    if (e) e.preventDefault();
+    mostrarTela('screen-history');
+    ativarNavItem(2);
+    renderizarHistorico();
+}
+
+function mostrarRelatorios(e) {
+    if (e) e.preventDefault();
+    mostrarTela('screen-reports');
+    ativarNavItem(3);
+    renderizarRelatorios();
+}
+
+function mostrarTemplates(e) {
+    if (e) e.preventDefault();
+    mostrarTela('screen-templates');
+    ativarNavItem(4);
+    renderizarTemplates();
 }
 
 function mostrarConfiguracoes(e) {
     if (e) e.preventDefault();
+    mostrarTela('screen-settings');
+    ativarNavItem(5);
+}
+
+function mostrarTela(telaId) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-    document.getElementById('screen-settings').classList.add('active');
+    document.getElementById(telaId).classList.add('active');
+}
+
+function ativarNavItem(index) {
     document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
-    document.querySelectorAll('.nav-item')[2].classList.add('active');
+    document.querySelectorAll('.nav-item')[index].classList.add('active');
 }
 
 function irParaPlanilha(id) {
     projetoAtualId = id;
     const proj = projetos.find(p => p.id === id);
     
+    if (!proj) {
+        mostrarToast('Projeto não encontrado', 'error');
+        return;
+    }
+    
     document.getElementById('sheet-title').textContent = proj.nome;
     document.getElementById('sheet-client').textContent = proj.cliente;
     document.getElementById('sheet-platform').textContent = formatarPlataforma(proj.plataforma);
-    document.getElementById('sheet-date').textContent = formatarData(proj.dataCriacao || new Date().toISOString());
+    document.getElementById('sheet-date').textContent = formatarData(proj.dataCriacao || new Date().toISOString(), true);
+    document.getElementById('breadcrumb-project').textContent = proj.nome;
     
-    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-    document.getElementById('screen-details').classList.add('active');
+    mostrarTela('screen-details');
     document.querySelector('.sidebar').classList.remove('active');
     
-    renderizarTabela(proj.contatos);
+    renderizarTabela(proj.contatos || []);
 }
 
-// --- Renderização da Tabela ---
+// ====================================
+// RENDERIZAÇÃO DE PROJETOS
+// ====================================
+function renderizarProjetos() {
+    const container = document.getElementById('projects-list');
+    const emptyState = document.getElementById('empty-state');
+    
+    let projetosFiltrados = projetos;
+    
+    // Aplicar filtro de plataforma
+    if (filtroAtual !== 'all') {
+        projetosFiltrados = projetos.filter(p => p.plataforma === filtroAtual);
+    }
+    
+    if (projetosFiltrados.length === 0) {
+        container.innerHTML = '';
+        emptyState.style.display = 'flex';
+        return;
+    }
+    
+    emptyState.style.display = 'none';
+    container.innerHTML = '';
+    
+    projetosFiltrados.forEach(projeto => {
+        const card = criarCardProjeto(projeto);
+        container.appendChild(card);
+    });
+}
+
+function criarCardProjeto(projeto) {
+    const div = document.createElement('div');
+    div.className = 'project-card';
+    
+    const totalContatos = projeto.contatos ? projeto.contatos.length : 0;
+    const contatosValidos = projeto.contatos ? projeto.contatos.filter(c => c.numero && c.nome).length : 0;
+    const taxaSucesso = calcularTaxaSucesso(projeto);
+    
+    // Tags
+    const tagsHtml = projeto.tags ? projeto.tags.split(',').map(tag => 
+        `<span class="project-tag">${tag.trim()}</span>`
+    ).join('') : '';
+    
+    div.innerHTML = `
+        <div class="project-card-header">
+            <div class="project-icon ${projeto.plataforma}">
+                <i class="fas fa-${getIconePlataforma(projeto.plataforma)}"></i>
+            </div>
+            <div class="project-info">
+                <h3>${projeto.nome}</h3>
+                <p>${projeto.cliente}</p>
+            </div>
+        </div>
+        <div class="project-card-body">
+            ${projeto.descricao ? `<p class="project-description">${projeto.descricao}</p>` : ''}
+            <div class="project-tags">
+                ${tagsHtml}
+            </div>
+        </div>
+        <div class="project-card-stats">
+            <div class="stat">
+                <span class="stat-label">Contatos</span>
+                <span class="stat-value">${totalContatos}</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">Válidos</span>
+                <span class="stat-value">${contatosValidos}</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">Sucesso</span>
+                <span class="stat-value">${taxaSucesso}%</span>
+            </div>
+        </div>
+        <div class="project-card-footer">
+            <button class="btn btn-primary" onclick="irParaPlanilha('${projeto.id}')">
+                <i class="fas fa-arrow-right"></i>
+                <span>Abrir</span>
+            </button>
+            <button class="btn btn-outline btn-icon" onclick="duplicarProjeto('${projeto.id}')" title="Duplicar">
+                <i class="fas fa-copy"></i>
+            </button>
+            <button class="btn btn-outline btn-icon" onclick="confirmarExclusaoProjeto('${projeto.id}')" title="Excluir">
+                <i class="fas fa-trash"></i>
+            </button>
+        </div>
+    `;
+    
+    return div;
+}
+
+function getIconePlataforma(plataforma) {
+    const icones = {
+        'chatwoot': 'comments',
+        'huggy': 'robot',
+        'zenvia': 'paper-plane',
+        'takeblip': 'cloud'
+    };
+    return icones[plataforma] || 'server';
+}
+
+function calcularTaxaSucesso(projeto) {
+    if (!projeto.contatos || projeto.contatos.length === 0) return 0;
+    
+    const sucessos = projeto.contatos.filter(c => c.statusEnvio === 'sucesso').length;
+    const total = projeto.contatos.filter(c => c.statusEnvio).length;
+    
+    if (total === 0) return 0;
+    return Math.round((sucessos / total) * 100);
+}
+
+// ====================================
+// FILTROS
+// ====================================
+function aplicarFiltro(filtro) {
+    filtroAtual = filtro;
+    
+    // Atualizar chips
+    document.querySelectorAll('.filter-chip').forEach(chip => {
+        chip.classList.remove('active');
+        if (chip.dataset.filter === filtro) {
+            chip.classList.add('active');
+        }
+    });
+    
+    renderizarProjetos();
+}
+
+function filtrarProjetos(termo) {
+    if (!termo) {
+        renderizarProjetos();
+        return;
+    }
+    
+    termo = termo.toLowerCase();
+    const container = document.getElementById('projects-list');
+    const emptyState = document.getElementById('empty-state');
+    
+    const projetosFiltrados = projetos.filter(p => 
+        p.nome.toLowerCase().includes(termo) ||
+        p.cliente.toLowerCase().includes(termo) ||
+        p.plataforma.toLowerCase().includes(termo) ||
+        (p.descricao && p.descricao.toLowerCase().includes(termo))
+    );
+    
+    if (projetosFiltrados.length === 0) {
+        container.innerHTML = '';
+        emptyState.style.display = 'flex';
+        return;
+    }
+    
+    emptyState.style.display = 'none';
+    container.innerHTML = '';
+    
+    projetosFiltrados.forEach(projeto => {
+        const card = criarCardProjeto(projeto);
+        container.appendChild(card);
+    });
+}
+
+// ====================================
+// ESTATÍSTICAS
+// ====================================
+function atualizarEstatisticas() {
+    const totalProjetos = projetos.length;
+    const totalContatos = projetos.reduce((sum, p) => sum + (p.contatos ? p.contatos.length : 0), 0);
+    const contatosPendentes = projetos.reduce((sum, p) => {
+        if (!p.contatos) return sum;
+        return sum + p.contatos.filter(c => !c.statusEnvio).length;
+    }, 0);
+    
+    let totalEnvios = 0;
+    let totalSucessos = 0;
+    
+    projetos.forEach(p => {
+        if (p.contatos) {
+            p.contatos.forEach(c => {
+                if (c.statusEnvio) {
+                    totalEnvios++;
+                    if (c.statusEnvio === 'sucesso') totalSucessos++;
+                }
+            });
+        }
+    });
+    
+    const taxaSucesso = totalEnvios > 0 ? Math.round((totalSucessos / totalEnvios) * 100) : 0;
+    
+    document.getElementById('total-projects').textContent = totalProjetos;
+    document.getElementById('total-contacts').textContent = totalContatos;
+    document.getElementById('pending-tests').textContent = contatosPendentes;
+    document.getElementById('success-rate').textContent = taxaSucesso + '%';
+}
+
+// ====================================
+// GERENCIAMENTO DE PROJETOS
+// ====================================
+function abrirModalProjeto() {
+    modoEdicao = false;
+    document.getElementById('modal-projeto-titulo').textContent = 'Configurar Novo Projeto';
+    document.getElementById('btn-salvar-projeto').innerHTML = '<i class="fas fa-check"></i><span>Criar Projeto</span>';
+    
+    // Limpar formulário
+    document.getElementById('p-nome').value = '';
+    document.getElementById('p-cliente').value = '';
+    document.getElementById('p-plataforma').value = '';
+    document.getElementById('p-account').value = '';
+    document.getElementById('p-inbox').value = '';
+    document.getElementById('p-webhook').value = '';
+    document.getElementById('p-tags').value = '';
+    document.getElementById('p-descricao').value = '';
+    
+    document.getElementById('modal-projeto').classList.add('active');
+}
+
+function abrirModalEditarProjeto() {
+    if (!projetoAtualId) return;
+    
+    const projeto = projetos.find(p => p.id === projetoAtualId);
+    if (!projeto) return;
+    
+    modoEdicao = true;
+    document.getElementById('modal-projeto-titulo').textContent = 'Editar Projeto';
+    document.getElementById('btn-salvar-projeto').innerHTML = '<i class="fas fa-save"></i><span>Salvar Alterações</span>';
+    
+    // Preencher formulário
+    document.getElementById('p-nome').value = projeto.nome;
+    document.getElementById('p-cliente').value = projeto.cliente;
+    document.getElementById('p-plataforma').value = projeto.plataforma;
+    document.getElementById('p-account').value = projeto.accountId;
+    document.getElementById('p-inbox').value = projeto.inboxId;
+    document.getElementById('p-webhook').value = projeto.webhookUrl;
+    document.getElementById('p-tags').value = projeto.tags || '';
+    document.getElementById('p-descricao').value = projeto.descricao || '';
+    
+    document.getElementById('modal-projeto').classList.add('active');
+}
+
+function salvarProjeto(event) {
+    event.preventDefault();
+    
+    const nome = document.getElementById('p-nome').value.trim();
+    const cliente = document.getElementById('p-cliente').value.trim();
+    const plataforma = document.getElementById('p-plataforma').value;
+    const accountId = document.getElementById('p-account').value.trim();
+    const inboxId = document.getElementById('p-inbox').value.trim();
+    const webhookUrl = document.getElementById('p-webhook').value.trim();
+    const tags = document.getElementById('p-tags').value.trim();
+    const descricao = document.getElementById('p-descricao').value.trim();
+    
+    // Validação de URL
+    if (!webhookUrl.startsWith('https://')) {
+        mostrarToast('A URL do webhook deve começar com https://', 'error');
+        return;
+    }
+    
+    if (modoEdicao && projetoAtualId) {
+        // Modo edição
+        const projetoIndex = projetos.findIndex(p => p.id === projetoAtualId);
+        if (projetoIndex !== -1) {
+            projetos[projetoIndex] = {
+                ...projetos[projetoIndex],
+                nome,
+                cliente,
+                plataforma,
+                accountId,
+                inboxId,
+                webhookUrl,
+                tags,
+                descricao,
+                dataModificacao: new Date().toISOString()
+            };
+            
+            // Atualizar informações na tela de detalhes
+            document.getElementById('sheet-title').textContent = nome;
+            document.getElementById('sheet-client').textContent = cliente;
+            document.getElementById('sheet-platform').textContent = formatarPlataforma(plataforma);
+            document.getElementById('breadcrumb-project').textContent = nome;
+            
+            mostrarToast('Projeto atualizado com sucesso!', 'success');
+        }
+    } else {
+        // Modo criação
+        const novoProjeto = {
+            id: Date.now().toString(),
+            nome,
+            cliente,
+            plataforma,
+            accountId,
+            inboxId,
+            webhookUrl,
+            tags,
+            descricao,
+            contatos: [],
+            dataCriacao: new Date().toISOString()
+        };
+        
+        projetos.push(novoProjeto);
+        mostrarToast('Projeto criado com sucesso!', 'success');
+    }
+    
+    salvarDados();
+    fecharModal();
+    renderizarProjetos();
+    atualizarEstatisticas();
+    document.getElementById('project-count').textContent = projetos.length;
+}
+
+function duplicarProjeto(id) {
+    const projeto = projetos.find(p => p.id === id);
+    if (!projeto) return;
+    
+    const novoProjeto = {
+        ...projeto,
+        id: Date.now().toString(),
+        nome: projeto.nome + ' (Cópia)',
+        contatos: projeto.contatos.map(c => ({...c, id: Date.now().toString() + Math.random()})),
+        dataCriacao: new Date().toISOString()
+    };
+    
+    projetos.push(novoProjeto);
+    salvarDados();
+    renderizarProjetos();
+    atualizarEstatisticas();
+    mostrarToast('Projeto duplicado com sucesso!', 'success');
+}
+
+function confirmarExclusaoProjeto(id) {
+    if (confirm('Tem certeza que deseja excluir este projeto? Esta ação não pode ser desfeita.')) {
+        excluirProjeto(id);
+    }
+}
+
+function excluirProjeto(id) {
+    const index = projetos.findIndex(p => p.id === id);
+    if (index !== -1) {
+        projetos.splice(index, 1);
+        salvarDados();
+        renderizarProjetos();
+        atualizarEstatisticas();
+        document.getElementById('project-count').textContent = projetos.length;
+        mostrarToast('Projeto excluído com sucesso', 'success');
+    }
+}
+
+function excluirProjetoAtual() {
+    if (!projetoAtualId) return;
+    
+    if (confirm('Tem certeza que deseja excluir este projeto? Esta ação não pode ser desfeita.')) {
+        excluirProjeto(projetoAtualId);
+        irParaHome();
+    }
+}
+
+// ====================================
+// RENDERIZAÇÃO DA TABELA
+// ====================================
 function renderizarTabela(contatos) {
     const tbody = document.getElementById('table-body');
     tbody.innerHTML = '';
+
+    if (!contatos || contatos.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--text-light);">Nenhum contato adicionado. Clique em "Adicionar nova linha" para começar.</td></tr>';
+        return;
+    }
 
     contatos.forEach((contato) => {
         const tr = document.createElement('tr');
@@ -99,7 +551,15 @@ function renderizarTabela(contatos) {
         // Determinar status
         let status = '';
         let statusClass = '';
-        if (contato.timestamp) {
+        if (contato.statusEnvio) {
+            if (contato.statusEnvio === 'sucesso') {
+                status = 'Enviado';
+                statusClass = 'success';
+            } else {
+                status = 'Erro';
+                statusClass = 'danger';
+            }
+        } else if (contato.timestamp) {
             const dataDisparo = new Date(contato.timestamp);
             const agora = new Date();
             
@@ -107,20 +567,27 @@ function renderizarTabela(contatos) {
                 status = 'Agendado';
                 statusClass = 'warning';
             } else {
-                status = 'Concluído';
-                statusClass = 'success';
+                status = 'Pendente';
+                statusClass = 'secondary';
             }
         } else {
             status = 'Pendente';
             statusClass = 'secondary';
         }
+        
+        // Último envio
+        const ultimoEnvio = contato.ultimoEnvio ? 
+            `<small>${formatarData(contato.ultimoEnvio)}</small>` : 
+            '<small style="color: var(--text-light);">-</small>';
 
         tr.innerHTML = `
             <td>
                 <input type="text" class="cell-input" 
                     value="${contato.numero || ''}" 
-                    placeholder="Ex: 5511999..."
+                    placeholder="Ex: 5511999999999"
                     onblur="atualizarCelula('${contato.id}', 'numero', this.value)"
+                    pattern="[0-9]{10,15}"
+                    title="Digite apenas números (10-15 dígitos)"
                 >
             </td>
             <td>
@@ -137,7 +604,10 @@ function renderizarTabela(contatos) {
                 >
             </td>
             <td>
-                <span class="tag ${statusClass}">${status}</span>
+                <span class="tag ${statusClass}" title="${contato.mensagemRetorno || ''}">${status}</span>
+            </td>
+            <td>
+                ${ultimoEnvio}
             </td>
             <td style="text-align:center;">
                 <button class="row-action" title="Excluir linha" onclick="excluirLinha('${contato.id}')">
@@ -149,15 +619,23 @@ function renderizarTabela(contatos) {
     });
 }
 
-// --- Lógica de Edição ---
+// ====================================
+// LÓGICA DE EDIÇÃO DA TABELA
+// ====================================
 function adicionarLinhaVazia() {
     const projIndex = projetos.findIndex(p => p.id === projetoAtualId);
+    if (projIndex === -1) return;
+    
     const novoContato = {
         id: Date.now().toString(),
         numero: '',
         nome: '',
         timestamp: null
     };
+    
+    if (!projetos[projIndex].contatos) {
+        projetos[projIndex].contatos = [];
+    }
     
     projetos[projIndex].contatos.push(novoContato);
     salvarDados();
@@ -170,10 +648,15 @@ function adicionarMultiplasLinhas() {
     if (!quantidade || isNaN(quantidade) || quantidade < 1) return;
     
     const projIndex = projetos.findIndex(p => p.id === projetoAtualId);
+    if (projIndex === -1) return;
     
-    for (let i = 0; i < quantidade; i++) {
+    if (!projetos[projIndex].contatos) {
+        projetos[projIndex].contatos = [];
+    }
+    
+    for (let i = 0; i < parseInt(quantidade); i++) {
         const novoContato = {
-            id: Date.now().toString() + i,
+            id: Date.now().toString() + '_' + i,
             numero: '',
             nome: '',
             timestamp: null
@@ -188,7 +671,19 @@ function adicionarMultiplasLinhas() {
 
 function atualizarCelula(contatoId, campo, valor) {
     const projIndex = projetos.findIndex(p => p.id === projetoAtualId);
+    if (projIndex === -1) return;
+    
     const contatoIndex = projetos[projIndex].contatos.findIndex(c => c.id === contatoId);
+    if (contatoIndex === -1) return;
+    
+    // Validação de número de WhatsApp
+    if (campo === 'numero') {
+        valor = valor.replace(/\D/g, ''); // Remove não-números
+        if (valor && (valor.length < 10 || valor.length > 15)) {
+            mostrarToast('Número deve ter entre 10 e 15 dígitos', 'warning');
+            return;
+        }
+    }
     
     if(projetos[projIndex].contatos[contatoIndex][campo] !== valor) {
         projetos[projIndex].contatos[contatoIndex][campo] = valor;
@@ -199,12 +694,16 @@ function atualizarCelula(contatoId, campo, valor) {
 
 function atualizarData(contatoId, valorDateInput) {
     const projIndex = projetos.findIndex(p => p.id === projetoAtualId);
+    if (projIndex === -1) return;
+    
     const contatoIndex = projetos[projIndex].contatos.findIndex(c => c.id === contatoId);
+    if (contatoIndex === -1) return;
     
     const timestamp = valorDateInput ? new Date(valorDateInput).getTime() : null;
     
     projetos[projIndex].contatos[contatoIndex].timestamp = timestamp;
     salvarDados();
+    renderizarTabela(projetos[projIndex].contatos);
     mostrarIndicadorSalvo();
 }
 
@@ -214,254 +713,197 @@ function excluirLinha(contatoId) {
     }
     
     const projIndex = projetos.findIndex(p => p.id === projetoAtualId);
-    projetos[projIndex].contatos = projetos[projIndex].contatos.filter(c => c.id !== contatoId);
+    if (projIndex === -1) return;
+    
+    const contatoIndex = projetos[projIndex].contatos.findIndex(c => c.id === contatoId);
+    if (contatoIndex === -1) return;
+    
+    projetos[projIndex].contatos.splice(contatoIndex, 1);
     salvarDados();
     renderizarTabela(projetos[projIndex].contatos);
     mostrarToast('Linha excluída', 'success');
 }
 
 function mostrarIndicadorSalvo() {
-    const indicator = document.createElement('div');
-    indicator.className = 'save-indicator';
-    indicator.innerHTML = '<i class="fas fa-check"></i> Salvo';
-    indicator.style.cssText = 'position: fixed; top: 20px; right: 20px; background: var(--success); color: white; padding: 8px 16px; border-radius: 8px; z-index: 9999;';
-    document.body.appendChild(indicator);
-    
-    setTimeout(() => {
-        indicator.remove();
-    }, 1500);
+    // Feedback visual discreto
+    const btn = document.querySelector('.add-row-btn');
+    if (btn) {
+        btn.style.background = 'var(--success)';
+        btn.style.color = 'white';
+        setTimeout(() => {
+            btn.style.background = '';
+            btn.style.color = '';
+        }, 500);
+    }
 }
 
-function filtrarProjetos(termo) {
-    const projsFiltrados = termo ? 
-        projetos.filter(p => 
-            p.nome.toLowerCase().includes(termo.toLowerCase()) || 
-            p.cliente.toLowerCase().includes(termo.toLowerCase())
-        ) : projetos;
-    
-    renderizarProjetos(projsFiltrados);
+// ====================================
+// IMPORTAÇÃO/EXPORTAÇÃO DE CONTATOS
+// ====================================
+function importarContatos() {
+    document.getElementById('import-file').click();
 }
 
-// --- Renderização de Projetos ---
-function renderizarProjetos(listaProjs = projetos) {
-    const container = document.getElementById('projects-list');
-    container.innerHTML = '';
+function processarImportacao(event) {
+    const file = event.target.files[0];
+    if (!file) return;
     
-    if (listaProjs.length === 0) {
-        container.innerHTML = `
-            <div style="text-align: center; padding: 60px 20px; color: var(--text-secondary);">
-                <i class="fas fa-folder-open" style="font-size: 48px; margin-bottom: 16px; opacity: 0.3;"></i>
-                <p style="font-size: 16px;">Nenhum projeto encontrado</p>
-                <p style="font-size: 14px; margin-top: 8px;">Clique em "Novo Projeto" para começar</p>
-            </div>
-        `;
+    const reader = new FileReader();
+    
+    reader.onload = function(e) {
+        try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, {type: 'array'});
+            
+            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+            const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+            
+            if (jsonData.length === 0) {
+                mostrarToast('Arquivo vazio ou formato inválido', 'error');
+                return;
+            }
+            
+            const projIndex = projetos.findIndex(p => p.id === projetoAtualId);
+            if (projIndex === -1) return;
+            
+            if (!projetos[projIndex].contatos) {
+                projetos[projIndex].contatos = [];
+            }
+            
+            let importados = 0;
+            jsonData.forEach(row => {
+                // Aceita variações de nomes de colunas
+                const numero = row.numero || row.Numero || row.telefone || row.Telefone || row.phone || '';
+                const nome = row.nome || row.Nome || row.name || row.Name || '';
+                
+                if (numero && nome) {
+                    projetos[projIndex].contatos.push({
+                        id: Date.now().toString() + '_' + Math.random(),
+                        numero: numero.toString().replace(/\D/g, ''),
+                        nome: nome.toString(),
+                        timestamp: null
+                    });
+                    importados++;
+                }
+            });
+            
+            salvarDados();
+            renderizarTabela(projetos[projIndex].contatos);
+            mostrarToast(`${importados} contatos importados com sucesso!`, 'success');
+            
+        } catch (error) {
+            console.error('Erro ao importar:', error);
+            mostrarToast('Erro ao processar arquivo. Verifique o formato.', 'error');
+        }
+    };
+    
+    reader.readAsArrayBuffer(file);
+    event.target.value = ''; // Limpar input
+}
+
+function exportarContatos() {
+    const projIndex = projetos.findIndex(p => p.id === projetoAtualId);
+    if (projIndex === -1) return;
+    
+    const contatos = projetos[projIndex].contatos || [];
+    if (contatos.length === 0) {
+        mostrarToast('Nenhum contato para exportar', 'warning');
         return;
     }
     
-    listaProjs.forEach((proj) => {
-        const totalContatos = proj.contatos.length;
-        const contatosPendentes = proj.contatos.filter(c => !c.timestamp || new Date(c.timestamp) > new Date()).length;
-        
-        const card = document.createElement('div');
-        card.className = 'project-card';
-        card.innerHTML = `
-            <div class="project-card-header">
-                <div>
-                    <h3 class="project-card-title">${proj.nome}</h3>
-                    <p class="project-card-subtitle">${proj.cliente}</p>
-                </div>
-                <div class="project-card-actions">
-                    <button class="btn-icon" onclick="editarProjeto('${proj.id}')" title="Editar">
-                        <i class="fas fa-edit"></i>
-                    </button>
-                    <button class="btn-icon" onclick="excluirProjeto('${proj.id}')" title="Excluir">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </div>
-            </div>
-            <div class="project-card-info">
-                <div class="info-item">
-                    <i class="fas fa-server"></i>
-                    <span>${formatarPlataforma(proj.plataforma)}</span>
-                </div>
-                <div class="info-item">
-                    <i class="fas fa-users"></i>
-                    <span>${totalContatos} contato${totalContatos !== 1 ? 's' : ''}</span>
-                </div>
-                <div class="info-item">
-                    <i class="fas fa-clock"></i>
-                    <span>${contatosPendentes} pendente${contatosPendentes !== 1 ? 's' : ''}</span>
-                </div>
-            </div>
-            <div class="project-card-footer">
-                <button class="btn btn-primary" onclick="irParaPlanilha('${proj.id}')">
-                    <i class="fas fa-arrow-right"></i>
-                    <span>Abrir Projeto</span>
-                </button>
-            </div>
-        `;
-        container.appendChild(card);
-    });
-}
-
-// --- Gestão de Projetos ---
-function salvarProjeto(e) {
-    e.preventDefault();
+    const dadosExportacao = contatos.map(c => ({
+        numero: c.numero,
+        nome: c.nome,
+        dataDisparo: c.timestamp ? new Date(c.timestamp).toLocaleString('pt-BR') : '',
+        status: c.statusEnvio || 'pendente',
+        ultimoEnvio: c.ultimoEnvio ? new Date(c.ultimoEnvio).toLocaleString('pt-BR') : ''
+    }));
     
-    const novoProjeto = {
-        id: Date.now().toString(),
-        nome: document.getElementById('p-nome').value,
-        cliente: document.getElementById('p-cliente').value,
-        plataforma: document.getElementById('p-plataforma').value,
-        accountId: document.getElementById('p-account').value,
-        inboxId: document.getElementById('p-inbox').value,
-        webhookUrl: document.getElementById('p-webhook').value,
-        descricao: document.getElementById('p-descricao').value,
-        dataCriacao: new Date().toISOString(),
-        contatos: []
-    };
+    const ws = XLSX.utils.json_to_sheet(dadosExportacao);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Contatos');
     
-    projetos.push(novoProjeto);
-    salvarDados();
-    fecharModal();
-    renderizarProjetos();
-    atualizarEstatisticas();
-    document.getElementById('project-count').textContent = projetos.length;
-    mostrarToast('Projeto criado com sucesso!', 'success');
-}
-
-function editarProjeto(id) {
-    const proj = projetos.find(p => p.id === id);
-    if (!proj) return;
+    const projeto = projetos[projIndex];
+    const filename = `contatos_${projeto.nome.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0,10)}.xlsx`;
     
-    document.getElementById('p-nome').value = proj.nome;
-    document.getElementById('p-cliente').value = proj.cliente;
-    document.getElementById('p-plataforma').value = proj.plataforma;
-    document.getElementById('p-account').value = proj.accountId;
-    document.getElementById('p-inbox').value = proj.inboxId;
-    document.getElementById('p-webhook').value = proj.webhookUrl;
-    document.getElementById('p-descricao').value = proj.descricao || '';
-    
-    // Alterar comportamento do formulário para edição
-    const form = document.querySelector('form');
-    form.onsubmit = function(e) {
-        e.preventDefault();
-        proj.nome = document.getElementById('p-nome').value;
-        proj.cliente = document.getElementById('p-cliente').value;
-        proj.plataforma = document.getElementById('p-plataforma').value;
-        proj.accountId = document.getElementById('p-account').value;
-        proj.inboxId = document.getElementById('p-inbox').value;
-        proj.webhookUrl = document.getElementById('p-webhook').value;
-        proj.descricao = document.getElementById('p-descricao').value;
-        
-        salvarDados();
-        fecharModal();
-        renderizarProjetos();
-        mostrarToast('Projeto atualizado com sucesso!', 'success');
-    };
-    
-    abrirModalProjeto();
+    XLSX.writeFile(wb, filename);
+    mostrarToast('Contatos exportados com sucesso!', 'success');
 }
 
-function excluirProjeto(id) {
-    if(!confirm('Tem certeza que deseja excluir este projeto? Esta ação não pode ser desfeita.')) {
-        return;
-    }
-    projetos = projetos.filter(p => p.id !== id);
-    salvarDados();
-    renderizarProjetos();
-    atualizarEstatisticas();
-    document.getElementById('project-count').textContent = projetos.length;
-    mostrarToast('Projeto excluído', 'error');
-}
-
-function salvarDados() {
-    localStorage.setItem('qa_projetos_v3', JSON.stringify(projetos));
-    console.log('📦 Dados salvos no localStorage:', projetos);
-}
-
-function abrirModalProjeto() {
-    document.getElementById('modal-projeto').classList.add('active');
-    document.querySelector('.sidebar').classList.remove('active');
-}
-
-function fecharModal() {
-    document.getElementById('modal-projeto').classList.remove('active');
-    const form = document.querySelector('form');
-    form.reset();
-    // Restaurar comportamento padrão do formulário
-    form.onsubmit = salvarProjeto;
-}
-
-// --- Funcionalidades Adicionais ---
-function atualizarEstatisticas() {
-    const totalProjetos = projetos.length;
-    const totalContatos = projetos.reduce((acc, proj) => acc + proj.contatos.length, 0);
-    const totalPendentes = projetos.reduce((acc, proj) => {
-        return acc + proj.contatos.filter(c => !c.timestamp || new Date(c.timestamp) > new Date()).length;
-    }, 0);
-    
-    const totalConcluidos = totalContatos - totalPendentes;
-    const taxaSucesso = totalContatos > 0 ? Math.round((totalConcluidos / totalContatos) * 100) : 0;
-    
-    document.getElementById('total-projects').textContent = totalProjetos;
-    document.getElementById('total-contacts').textContent = totalContatos;
-    document.getElementById('pending-tests').textContent = totalPendentes;
-    document.getElementById('success-rate').textContent = taxaSucesso + '%';
-}
-
+// ====================================
+// EXECUÇÃO DE TESTES
+// ====================================
 async function executarTestes() {
     const projIndex = projetos.findIndex(p => p.id === projetoAtualId);
+    if (projIndex === -1) {
+        mostrarToast('Projeto não encontrado', 'error');
+        return;
+    }
+    
     const projeto = projetos[projIndex];
+    const contatos = projeto.contatos || [];
     
-    console.log('🚀 === INICIANDO EXECUÇÃO DE TESTES ===');
-    console.log('📋 Projeto:', projeto.nome);
-    console.log('🔗 Webhook:', projeto.webhookUrl);
-    console.log('👥 Total de contatos no projeto:', projeto.contatos.length);
-    console.log('📊 Dados dos contatos:', projeto.contatos);
-    
-    // Validações iniciais
-    if (projeto.contatos.length === 0) {
-        mostrarToast('Adicione contatos antes de executar os testes', 'warning');
-        return;
-    }
-    
-    if (!projeto.webhookUrl) {
-        mostrarToast('Webhook URL não configurada para este projeto', 'error');
-        return;
-    }
-    
-    // Filtrar apenas contatos com dados válidos
-    const contatosValidos = projeto.contatos.filter(c => c.numero && c.nome);
-    
-    console.log('✅ Contatos válidos (com número e nome):', contatosValidos.length);
-    console.log('📋 Lista de contatos válidos:', contatosValidos);
+    // Validar contatos
+    const contatosValidos = contatos.filter(c => 
+        c.numero && c.numero.trim() !== '' && 
+        c.nome && c.nome.trim() !== ''
+    );
     
     if (contatosValidos.length === 0) {
-        mostrarToast('Nenhum contato válido encontrado. Preencha número e nome.', 'warning');
-        console.warn('⚠️ Nenhum contato tem número E nome preenchidos');
+        mostrarToast('Nenhum contato válido para enviar. Preencha número e nome.', 'warning');
         return;
     }
     
-    mostrarToast(`Iniciando envio de ${contatosValidos.length} disparo(s)...`, 'success');
+    // Mostrar modal de confirmação se configurado
+    if (configuracoes.confirmDispatch) {
+        document.getElementById('confirm-total').textContent = contatos.length;
+        document.getElementById('confirm-valid').textContent = contatosValidos.length;
+        document.getElementById('modal-confirmar').classList.add('active');
+    } else {
+        executarDisparos(contatosValidos, projeto, projIndex);
+    }
+}
+
+function fecharModalConfirmar() {
+    document.getElementById('modal-confirmar').classList.remove('active');
+}
+
+function confirmarExecucao() {
+    fecharModalConfirmar();
+    
+    const projIndex = projetos.findIndex(p => p.id === projetoAtualId);
+    if (projIndex === -1) return;
+    
+    const projeto = projetos[projIndex];
+    const contatos = projeto.contatos || [];
+    const contatosValidos = contatos.filter(c => 
+        c.numero && c.numero.trim() !== '' && 
+        c.nome && c.nome.trim() !== ''
+    );
+    
+    executarDisparos(contatosValidos, projeto, projIndex);
+}
+
+async function executarDisparos(contatosValidos, projeto, projIndex) {
+    // Mostrar modal de progresso
+    document.getElementById('modal-progress').classList.add('active');
+    document.getElementById('progress-total').textContent = contatosValidos.length;
+    document.getElementById('progress-current').textContent = '0';
+    document.getElementById('progress-success').textContent = '0';
+    document.getElementById('progress-errors').textContent = '0';
+    document.getElementById('progress-fill').style.width = '0%';
+    document.getElementById('progress-log').innerHTML = '';
+    document.getElementById('btn-close-progress').style.display = 'none';
     
     let sucessos = 0;
     let erros = 0;
-    const resultados = [];
+    const delay = configuracoes.dispatchDelay || 500;
     
-    // Processar cada contato
     for (let i = 0; i < contatosValidos.length; i++) {
         const contato = contatosValidos[i];
         
-        console.log(`\n📤 Enviando contato ${i + 1}/${contatosValidos.length}:`);
-        console.log('   Nome:', contato.nome);
-        console.log('   Número:', contato.numero);
-        console.log('   Data:', contato.timestamp);
-        
         try {
-            // Preparar payload para enviar ao webhook
             const payload = {
-                // Informações do projeto
                 projeto: {
                     id: projeto.id,
                     nome: projeto.nome,
@@ -470,24 +912,19 @@ async function executarTestes() {
                     accountId: projeto.accountId,
                     inboxId: projeto.inboxId
                 },
-                // Informações do contato
                 contato: {
                     id: contato.id,
                     numero: contato.numero,
                     nome: contato.nome,
                     dataAgendada: contato.timestamp ? new Date(contato.timestamp).toISOString() : null
                 },
-                // Metadados
                 metadata: {
                     dataEnvio: new Date().toISOString(),
                     origem: 'QAManager',
-                    versao: '1.0'
+                    versao: '2.0'
                 }
             };
             
-            console.log('📦 Payload enviado:', JSON.stringify(payload, null, 2));
-            
-            // Fazer requisição para o webhook
             const response = await fetch(projeto.webhookUrl, {
                 method: 'POST',
                 headers: {
@@ -496,15 +933,9 @@ async function executarTestes() {
                 body: JSON.stringify(payload)
             });
             
-            console.log('📨 Status da resposta:', response.status, response.statusText);
-            
             if (response.ok) {
                 sucessos++;
                 
-                const responseData = await response.text();
-                console.log('✅ Resposta do webhook:', responseData);
-                
-                // Atualizar status do contato
                 const contatoIndex = projeto.contatos.findIndex(c => c.id === contato.id);
                 if (contatoIndex !== -1) {
                     projeto.contatos[contatoIndex].ultimoEnvio = new Date().toISOString();
@@ -512,20 +943,13 @@ async function executarTestes() {
                     projeto.contatos[contatoIndex].mensagemRetorno = 'Enviado com sucesso';
                 }
                 
-                resultados.push({
-                    contato: contato.nome,
-                    numero: contato.numero,
-                    status: 'sucesso',
-                    mensagem: 'Enviado com sucesso'
-                });
+                adicionarAoHistorico(projeto, contato, 'sucesso', 'Enviado com sucesso');
+                adicionarLogProgresso(`✓ ${contato.nome}: Enviado com sucesso`, 'success');
                 
             } else {
                 erros++;
                 const errorText = await response.text();
                 
-                console.error('❌ Erro na resposta:', errorText);
-                
-                // Registrar erro
                 const contatoIndex = projeto.contatos.findIndex(c => c.id === contato.id);
                 if (contatoIndex !== -1) {
                     projeto.contatos[contatoIndex].ultimoEnvio = new Date().toISOString();
@@ -533,19 +957,13 @@ async function executarTestes() {
                     projeto.contatos[contatoIndex].mensagemRetorno = `Erro ${response.status}: ${errorText}`;
                 }
                 
-                resultados.push({
-                    contato: contato.nome,
-                    numero: contato.numero,
-                    status: 'erro',
-                    mensagem: `Erro ${response.status}`
-                });
+                adicionarAoHistorico(projeto, contato, 'erro', `Erro ${response.status}`);
+                adicionarLogProgresso(`✗ ${contato.nome}: Erro ${response.status}`, 'error');
             }
             
         } catch (error) {
             erros++;
-            console.error('❌ Erro ao enviar para webhook:', error);
             
-            // Registrar erro de conexão
             const contatoIndex = projeto.contatos.findIndex(c => c.id === contato.id);
             if (contatoIndex !== -1) {
                 projeto.contatos[contatoIndex].ultimoEnvio = new Date().toISOString();
@@ -553,42 +971,476 @@ async function executarTestes() {
                 projeto.contatos[contatoIndex].mensagemRetorno = `Erro de conexão: ${error.message}`;
             }
             
-            resultados.push({
-                contato: contato.nome,
-                numero: contato.numero,
-                status: 'erro',
-                mensagem: error.message
-            });
+            adicionarAoHistorico(projeto, contato, 'erro', error.message);
+            adicionarLogProgresso(`✗ ${contato.nome}: ${error.message}`, 'error');
         }
         
-        // Pequeno delay entre requisições para não sobrecarregar
+        // Atualizar progresso
+        const progresso = Math.round(((i + 1) / contatosValidos.length) * 100);
+        document.getElementById('progress-fill').style.width = progresso + '%';
+        document.getElementById('progress-current').textContent = i + 1;
+        document.getElementById('progress-success').textContent = sucessos;
+        document.getElementById('progress-errors').textContent = erros;
+        
+        // Delay entre requisições
         if (i < contatosValidos.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await new Promise(resolve => setTimeout(resolve, delay));
         }
     }
     
     // Salvar alterações
     projetos[projIndex] = projeto;
     salvarDados();
+    salvarHistorico();
     renderizarTabela(projeto.contatos);
     
     // Mostrar resultado final
-    if (erros === 0) {
-        mostrarToast(`✅ Todos os ${sucessos} disparos foram enviados com sucesso!`, 'success');
-    } else if (sucessos === 0) {
-        mostrarToast(`❌ Todos os ${erros} disparos falharam. Verifique a URL do webhook.`, 'error');
-    } else {
-        mostrarToast(`⚠️ Concluído: ${sucessos} sucesso(s), ${erros} erro(s)`, 'warning');
-    }
+    document.getElementById('btn-close-progress').style.display = 'block';
     
-    // Log detalhado no console para debug
-    console.log('\n🏁 === RESULTADO DA EXECUÇÃO ===');
-    console.log('📊 Total de contatos:', contatosValidos.length);
-    console.log('✅ Sucessos:', sucessos);
-    console.log('❌ Erros:', erros);
-    console.log('📋 Detalhes completos:', resultados);
+    if (erros === 0) {
+        adicionarLogProgresso(`\n🎉 Concluído! Todos os ${sucessos} disparos foram enviados com sucesso!`, 'success');
+        if (configuracoes.testAlerts) {
+            mostrarToast(`✅ ${sucessos} disparos enviados com sucesso!`, 'success');
+        }
+    } else if (sucessos === 0) {
+        adicionarLogProgresso(`\n❌ Todos os ${erros} disparos falharam.`, 'error');
+        if (configuracoes.errorNotifications) {
+            mostrarToast(`❌ Todos os disparos falharam`, 'error');
+        }
+    } else {
+        adicionarLogProgresso(`\n⚠️ Concluído: ${sucessos} sucesso(s), ${erros} erro(s)`, 'warning');
+        mostrarToast(`⚠️ ${sucessos} sucessos, ${erros} erros`, 'warning');
+    }
 }
 
+function adicionarLogProgresso(mensagem, tipo) {
+    const log = document.getElementById('progress-log');
+    const p = document.createElement('p');
+    p.className = tipo;
+    p.textContent = mensagem;
+    log.appendChild(p);
+    log.scrollTop = log.scrollHeight;
+}
+
+function fecharModalProgress() {
+    document.getElementById('modal-progress').classList.remove('active');
+    atualizarEstatisticas();
+}
+
+// ====================================
+// TESTE DE WEBHOOK
+// ====================================
+async function testarWebhook() {
+    const projIndex = projetos.findIndex(p => p.id === projetoAtualId);
+    if (projIndex === -1) return;
+    
+    const projeto = projetos[projIndex];
+    
+    const payloadTeste = {
+        projeto: {
+            id: projeto.id,
+            nome: projeto.nome,
+            cliente: projeto.cliente
+        },
+        contato: {
+            numero: '5511999999999',
+            nome: 'Teste de Conexão'
+        },
+        metadata: {
+            teste: true,
+            dataEnvio: new Date().toISOString()
+        }
+    };
+    
+    try {
+        mostrarToast('Testando webhook...', 'warning');
+        
+        const response = await fetch(projeto.webhookUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payloadTeste)
+        });
+        
+        if (response.ok) {
+            const data = await response.text();
+            mostrarToast('✅ Webhook testado com sucesso!', 'success');
+            console.log('Resposta do webhook:', data);
+        } else {
+            mostrarToast(`❌ Erro ${response.status}: ${response.statusText}`, 'error');
+        }
+    } catch (error) {
+        mostrarToast(`❌ Erro de conexão: ${error.message}`, 'error');
+    }
+}
+
+// ====================================
+// HISTÓRICO
+// ====================================
+function adicionarAoHistorico(projeto, contato, status, mensagem) {
+    const registro = {
+        id: Date.now().toString() + Math.random(),
+        projetoId: projeto.id,
+        projetoNome: projeto.nome,
+        cliente: projeto.cliente,
+        plataforma: projeto.plataforma,
+        contatoNumero: contato.numero,
+        contatoNome: contato.nome,
+        status: status,
+        mensagem: mensagem,
+        dataHora: new Date().toISOString()
+    };
+    
+    historico.unshift(registro); // Adicionar no início
+    
+    // Limitar histórico a 1000 registros
+    if (historico.length > 1000) {
+        historico = historico.slice(0, 1000);
+    }
+}
+
+function salvarHistorico() {
+    localStorage.setItem('qa_historico', JSON.stringify(historico));
+}
+
+function renderizarHistorico() {
+    const container = document.getElementById('history-list');
+    const emptyState = document.getElementById('history-empty');
+    
+    // Preencher filtro de projetos
+    const filterSelect = document.getElementById('history-project-filter');
+    const projetosUnicos = [...new Set(historico.map(h => h.projetoNome))];
+    filterSelect.innerHTML = '<option value="">Todos os projetos</option>';
+    projetosUnicos.forEach(nome => {
+        const option = document.createElement('option');
+        option.value = nome;
+        option.textContent = nome;
+        filterSelect.appendChild(option);
+    });
+    
+    filtrarHistorico();
+}
+
+function filtrarHistorico() {
+    const container = document.getElementById('history-list');
+    const emptyState = document.getElementById('history-empty');
+    
+    const projetoFiltro = document.getElementById('history-project-filter').value;
+    const statusFiltro = document.getElementById('history-status-filter').value;
+    const dataFiltro = document.getElementById('history-date-filter').value;
+    
+    let historicoFiltrado = historico;
+    
+    if (projetoFiltro) {
+        historicoFiltrado = historicoFiltrado.filter(h => h.projetoNome === projetoFiltro);
+    }
+    
+    if (statusFiltro) {
+        historicoFiltrado = historicoFiltrado.filter(h => h.status === statusFiltro);
+    }
+    
+    if (dataFiltro) {
+        const dataFiltroDate = new Date(dataFiltro);
+        historicoFiltrado = historicoFiltrado.filter(h => {
+            const dataRegistro = new Date(h.dataHora);
+            return dataRegistro.toDateString() === dataFiltroDate.toDateString();
+        });
+    }
+    
+    if (historicoFiltrado.length === 0) {
+        container.innerHTML = '';
+        emptyState.style.display = 'flex';
+        return;
+    }
+    
+    emptyState.style.display = 'none';
+    container.innerHTML = '';
+    
+    historicoFiltrado.forEach(registro => {
+        const item = document.createElement('div');
+        item.className = 'history-item';
+        
+        const statusClass = registro.status === 'sucesso' ? 'success' : 'danger';
+        const statusIcon = registro.status === 'sucesso' ? 'check-circle' : 'times-circle';
+        
+        item.innerHTML = `
+            <div class="history-icon ${statusClass}">
+                <i class="fas fa-${statusIcon}"></i>
+            </div>
+            <div class="history-content">
+                <div class="history-header">
+                    <h4>${registro.contatoNome}</h4>
+                    <span class="tag ${statusClass}">${registro.status}</span>
+                </div>
+                <p class="history-details">
+                    <strong>${registro.projetoNome}</strong> · ${registro.cliente} · ${formatarPlataforma(registro.plataforma)}
+                </p>
+                <p class="history-number">${registro.contatoNumero}</p>
+                ${registro.mensagem ? `<p class="history-message">${registro.mensagem}</p>` : ''}
+                <p class="history-date">${formatarData(registro.dataHora)}</p>
+            </div>
+        `;
+        
+        container.appendChild(item);
+    });
+}
+
+// ====================================
+// RELATÓRIOS
+// ====================================
+function renderizarRelatorios() {
+    renderizarGraficoPlatformas();
+    renderizarGraficoSucesso();
+    renderizarTabelaResumo();
+}
+
+function renderizarGraficoPlatformas() {
+    const container = document.getElementById('platform-chart');
+    
+    const plataformas = {};
+    projetos.forEach(p => {
+        plataformas[p.plataforma] = (plataformas[p.plataforma] || 0) + 1;
+    });
+    
+    const cores = {
+        'chatwoot': '#6366f1',
+        'huggy': '#10b981',
+        'zenvia': '#f59e0b',
+        'takeblip': '#ef4444'
+    };
+    
+    let html = '<div class="simple-chart">';
+    
+    Object.entries(plataformas).forEach(([plat, count]) => {
+        const porcentagem = Math.round((count / projetos.length) * 100);
+        html += `
+            <div class="chart-item">
+                <div class="chart-label">
+                    <span>${formatarPlataforma(plat)}</span>
+                    <strong>${count} projeto${count > 1 ? 's' : ''}</strong>
+                </div>
+                <div class="chart-bar">
+                    <div class="chart-bar-fill" style="width: ${porcentagem}%; background: ${cores[plat] || '#6366f1'}"></div>
+                </div>
+            </div>
+        `;
+    });
+    
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+function renderizarGraficoSucesso() {
+    const container = document.getElementById('success-chart');
+    
+    let totalEnvios = 0;
+    let totalSucessos = 0;
+    let totalErros = 0;
+    
+    projetos.forEach(p => {
+        if (p.contatos) {
+            p.contatos.forEach(c => {
+                if (c.statusEnvio === 'sucesso') {
+                    totalSucessos++;
+                    totalEnvios++;
+                } else if (c.statusEnvio === 'erro') {
+                    totalErros++;
+                    totalEnvios++;
+                }
+            });
+        }
+    });
+    
+    const porcentagemSucesso = totalEnvios > 0 ? Math.round((totalSucessos / totalEnvios) * 100) : 0;
+    const porcentagemErro = totalEnvios > 0 ? Math.round((totalErros / totalEnvios) * 100) : 0;
+    
+    container.innerHTML = `
+        <div class="simple-chart">
+            <div class="chart-item">
+                <div class="chart-label">
+                    <span>Sucessos</span>
+                    <strong>${totalSucessos} (${porcentagemSucesso}%)</strong>
+                </div>
+                <div class="chart-bar">
+                    <div class="chart-bar-fill" style="width: ${porcentagemSucesso}%; background: var(--success)"></div>
+                </div>
+            </div>
+            <div class="chart-item">
+                <div class="chart-label">
+                    <span>Erros</span>
+                    <strong>${totalErros} (${porcentagemErro}%)</strong>
+                </div>
+                <div class="chart-bar">
+                    <div class="chart-bar-fill" style="width: ${porcentagemErro}%; background: var(--danger)"></div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function renderizarTabelaResumo() {
+    const container = document.getElementById('summary-table');
+    
+    let html = `
+        <table class="modern-table">
+            <thead>
+                <tr>
+                    <th>Projeto</th>
+                    <th>Cliente</th>
+                    <th>Plataforma</th>
+                    <th>Total Contatos</th>
+                    <th>Enviados</th>
+                    <th>Taxa Sucesso</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    
+    projetos.forEach(p => {
+        const totalContatos = p.contatos ? p.contatos.length : 0;
+        const totalEnviados = p.contatos ? p.contatos.filter(c => c.statusEnvio).length : 0;
+        const taxaSucesso = calcularTaxaSucesso(p);
+        
+        html += `
+            <tr>
+                <td><strong>${p.nome}</strong></td>
+                <td>${p.cliente}</td>
+                <td>${formatarPlataforma(p.plataforma)}</td>
+                <td>${totalContatos}</td>
+                <td>${totalEnviados}</td>
+                <td><span class="tag ${taxaSucesso >= 80 ? 'success' : taxaSucesso >= 50 ? 'warning' : 'danger'}">${taxaSucesso}%</span></td>
+            </tr>
+        `;
+    });
+    
+    html += `
+            </tbody>
+        </table>
+    `;
+    
+    container.innerHTML = html;
+}
+
+// ====================================
+// TEMPLATES
+// ====================================
+function abrirModalTemplate() {
+    document.getElementById('t-nome').value = '';
+    document.getElementById('t-descricao').value = '';
+    document.getElementById('t-config').value = '';
+    document.getElementById('modal-template').classList.add('active');
+}
+
+function fecharModalTemplate() {
+    document.getElementById('modal-template').classList.remove('active');
+}
+
+function salvarTemplate(event) {
+    event.preventDefault();
+    
+    const nome = document.getElementById('t-nome').value.trim();
+    const descricao = document.getElementById('t-descricao').value.trim();
+    const config = document.getElementById('t-config').value.trim();
+    
+    // Validar JSON
+    try {
+        JSON.parse(config);
+    } catch (error) {
+        mostrarToast('JSON inválido. Verifique a sintaxe.', 'error');
+        return;
+    }
+    
+    const novoTemplate = {
+        id: Date.now().toString(),
+        nome,
+        descricao,
+        config,
+        dataCriacao: new Date().toISOString()
+    };
+    
+    templates.push(novoTemplate);
+    localStorage.setItem('qa_templates', JSON.stringify(templates));
+    
+    fecharModalTemplate();
+    renderizarTemplates();
+    mostrarToast('Template salvo com sucesso!', 'success');
+}
+
+function renderizarTemplates() {
+    const container = document.getElementById('templates-list');
+    const emptyState = document.getElementById('templates-empty');
+    
+    if (templates.length === 0) {
+        container.innerHTML = '';
+        emptyState.style.display = 'flex';
+        return;
+    }
+    
+    emptyState.style.display = 'none';
+    container.innerHTML = '';
+    
+    templates.forEach(template => {
+        const card = document.createElement('div');
+        card.className = 'template-card';
+        
+        card.innerHTML = `
+            <div class="template-header">
+                <h3><i class="fas fa-file-code"></i> ${template.nome}</h3>
+            </div>
+            <div class="template-body">
+                ${template.descricao ? `<p>${template.descricao}</p>` : ''}
+                <pre class="template-preview">${template.config.substring(0, 100)}${template.config.length > 100 ? '...' : ''}</pre>
+            </div>
+            <div class="template-footer">
+                <button class="btn btn-outline" onclick="copiarTemplate('${template.id}')">
+                    <i class="fas fa-copy"></i>
+                    Copiar
+                </button>
+                <button class="btn btn-outline" onclick="visualizarTemplate('${template.id}')">
+                    <i class="fas fa-eye"></i>
+                    Ver
+                </button>
+                <button class="btn btn-outline" onclick="excluirTemplate('${template.id}')">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        `;
+        
+        container.appendChild(card);
+    });
+}
+
+function copiarTemplate(id) {
+    const template = templates.find(t => t.id === id);
+    if (!template) return;
+    
+    navigator.clipboard.writeText(template.config);
+    mostrarToast('Template copiado para a área de transferência!', 'success');
+}
+
+function visualizarTemplate(id) {
+    const template = templates.find(t => t.id === id);
+    if (!template) return;
+    
+    alert(`Nome: ${template.nome}\n\nConfiguração:\n${template.config}`);
+}
+
+function excluirTemplate(id) {
+    if (!confirm('Deseja excluir este template?')) return;
+    
+    const index = templates.findIndex(t => t.id === id);
+    if (index !== -1) {
+        templates.splice(index, 1);
+        localStorage.setItem('qa_templates', JSON.stringify(templates));
+        renderizarTemplates();
+        mostrarToast('Template excluído', 'success');
+    }
+}
+
+// ====================================
+// EXPORTAÇÃO/IMPORTAÇÃO DE DADOS
+// ====================================
 function exportarProjetos() {
     const dataStr = JSON.stringify(projetos, null, 2);
     const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
@@ -603,11 +1455,123 @@ function exportarProjetos() {
     mostrarToast('Projetos exportados com sucesso!', 'success');
 }
 
-function importarContatos() {
-    mostrarToast('Funcionalidade de importação em desenvolvimento', 'warning');
+function exportarTodosDados() {
+    const dados = {
+        projetos,
+        historico,
+        templates,
+        configuracoes,
+        versao: '2.0',
+        dataExportacao: new Date().toISOString()
+    };
+    
+    const dataStr = JSON.stringify(dados, null, 2);
+    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+    
+    const exportFileDefaultName = 'qa-manager-backup-' + new Date().toISOString().slice(0,10) + '.json';
+    
+    const linkElement = document.createElement('a');
+    linkElement.setAttribute('href', dataUri);
+    linkElement.setAttribute('download', exportFileDefaultName);
+    linkElement.click();
+    
+    mostrarToast('Backup completo exportado!', 'success');
 }
 
-// --- Utilitários ---
+function importarDados() {
+    document.getElementById('import-data-file').click();
+}
+
+function processarImportacaoDados(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    
+    reader.onload = function(e) {
+        try {
+            const dados = JSON.parse(e.target.result);
+            
+            if (!confirm('Isso irá substituir todos os dados atuais. Deseja continuar?')) {
+                return;
+            }
+            
+            if (dados.projetos) projetos = dados.projetos;
+            if (dados.historico) historico = dados.historico;
+            if (dados.templates) templates = dados.templates;
+            if (dados.configuracoes) configuracoes = dados.configuracoes;
+            
+            salvarDados();
+            salvarHistorico();
+            localStorage.setItem('qa_templates', JSON.stringify(templates));
+            localStorage.setItem('qa_configuracoes', JSON.stringify(configuracoes));
+            
+            location.reload();
+            
+        } catch (error) {
+            console.error('Erro ao importar:', error);
+            mostrarToast('Erro ao processar arquivo de backup', 'error');
+        }
+    };
+    
+    reader.readAsText(file);
+    event.target.value = '';
+}
+
+function limparTodosDados() {
+    if (!confirm('ATENÇÃO: Isso irá apagar TODOS os dados do sistema permanentemente. Esta ação não pode ser desfeita. Deseja continuar?')) {
+        return;
+    }
+    
+    if (!confirm('Última confirmação: Tem CERTEZA que deseja apagar todos os dados?')) {
+        return;
+    }
+    
+    projetos = [];
+    historico = [];
+    templates = [];
+    
+    localStorage.removeItem('qa_projetos_v4');
+    localStorage.removeItem('qa_historico');
+    localStorage.removeItem('qa_templates');
+    
+    location.reload();
+}
+
+// ====================================
+// NOTIFICAÇÕES
+// ====================================
+function atualizarContadorNotificacoes() {
+    // Calcular notificações pendentes
+    let count = 0;
+    
+    // Testes pendentes
+    projetos.forEach(p => {
+        if (p.contatos) {
+            count += p.contatos.filter(c => !c.statusEnvio && c.timestamp).length;
+        }
+    });
+    
+    document.getElementById('notification-count').textContent = count;
+    
+    if (count === 0) {
+        document.getElementById('notification-count').style.display = 'none';
+    } else {
+        document.getElementById('notification-count').style.display = 'flex';
+    }
+}
+
+function mostrarNotificacoes() {
+    mostrarToast('Painel de notificações em desenvolvimento', 'warning');
+}
+
+// ====================================
+// UTILITÁRIOS
+// ====================================
+function salvarDados() {
+    localStorage.setItem('qa_projetos_v4', JSON.stringify(projetos));
+}
+
 function formatarPlataforma(plataforma) {
     const plataformas = {
         'chatwoot': 'Chatwoot',
@@ -624,6 +1588,16 @@ function formatarData(dataString, apenasData = false) {
         return data.toLocaleDateString('pt-BR');
     }
     return data.toLocaleDateString('pt-BR') + ' ' + data.toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'});
+}
+
+function fecharModal() {
+    document.getElementById('modal-projeto').classList.remove('active');
+}
+
+function fecharTodosModais() {
+    document.querySelectorAll('.modal-overlay').forEach(modal => {
+        modal.classList.remove('active');
+    });
 }
 
 function mostrarToast(mensagem, tipo = 'success') {
