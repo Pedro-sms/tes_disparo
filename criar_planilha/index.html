@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QAManager - Sistema Avançado de Testes de Disparos</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <title>QAManager Pro - Sistema Avançado de Testes de Disparos</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="style.css">
 </head>
@@ -14,33 +14,38 @@
         <div class="sidebar-header">
             <div class="logo">
                 <div class="logo-icon">
-                    <i class="fas fa-chart-bar"></i>
+                    <i class="fas fa-bolt"></i>
                 </div>
                 <span>QA Manager</span>
+                <span class="version-badge">PRO</span>
             </div>
         </div>
         
         <div class="nav-menu">
-            <a href="#" class="nav-item active" onclick="irParaHome(event)">
+            <a href="#" class="nav-item active" onclick="irParaHome(event)" data-screen="dashboard">
                 <i class="fas fa-home"></i>
                 <span>Dashboard</span>
             </a>
-            <a href="#" class="nav-item" onclick="irParaPlanilhaLista(event)">
+            <a href="#" class="nav-item" onclick="irParaPlanilhaLista(event)" data-screen="projects">
                 <i class="fas fa-table"></i>
                 <span>Projetos</span>
                 <span class="notification-badge" id="project-count">0</span>
             </a>
-            <a href="#" class="nav-item" onclick="mostrarConfiguracoes(event)">
-                <i class="fas fa-cog"></i>
-                <span>Configurações</span>
-            </a>
-            <a href="#" class="nav-item">
+            <a href="#" class="nav-item" onclick="mostrarHistorico(event)" data-screen="history">
                 <i class="fas fa-history"></i>
                 <span>Histórico</span>
             </a>
-            <a href="#" class="nav-item">
+            <a href="#" class="nav-item" onclick="mostrarRelatorios(event)" data-screen="reports">
                 <i class="fas fa-chart-line"></i>
                 <span>Relatórios</span>
+            </a>
+            <a href="#" class="nav-item" onclick="mostrarTemplates(event)" data-screen="templates">
+                <i class="fas fa-file-alt"></i>
+                <span>Templates</span>
+            </a>
+            <a href="#" class="nav-item" onclick="mostrarConfiguracoes(event)" data-screen="settings">
+                <i class="fas fa-cog"></i>
+                <span>Configurações</span>
             </a>
         </div>
         
@@ -62,15 +67,24 @@
     <div class="main-content">
         <!-- Top Bar -->
         <div class="top-bar">
-            <div class="search-box">
-                <i class="fas fa-search"></i>
-                <input type="text" id="search-input" placeholder="Buscar projetos...">
+            <div class="search-container">
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="search-input" placeholder="Buscar projetos, clientes, plataformas...">
+                </div>
+                <div class="search-filters" id="search-filters">
+                    <button class="filter-chip active" data-filter="all" onclick="aplicarFiltro('all')">Todos</button>
+                    <button class="filter-chip" data-filter="chatwoot" onclick="aplicarFiltro('chatwoot')">Chatwoot</button>
+                    <button class="filter-chip" data-filter="huggy" onclick="aplicarFiltro('huggy')">Huggy</button>
+                    <button class="filter-chip" data-filter="zenvia" onclick="aplicarFiltro('zenvia')">Zenvia</button>
+                    <button class="filter-chip" data-filter="takeblip" onclick="aplicarFiltro('takeblip')">Take Blip</button>
+                </div>
             </div>
             
             <div class="top-bar-actions">
-                <button class="notification-btn">
+                <button class="notification-btn" onclick="mostrarNotificacoes()">
                     <i class="fas fa-bell"></i>
-                    <span class="notification-badge">3</span>
+                    <span class="notification-badge" id="notification-count">0</span>
                 </button>
                 <button class="btn btn-primary" onclick="abrirModalProjeto()">
                     <i class="fas fa-plus"></i>
@@ -85,23 +99,23 @@
             <div id="screen-dashboard" class="screen active">
                 <div class="dashboard-header">
                     <h1 class="dashboard-title">Dashboard de Testes</h1>
-                    <p class="dashboard-subtitle">Acompanhe o desempenho dos seus testes de disparos</p>
+                    <p class="dashboard-subtitle">Acompanhe o desempenho dos seus testes de disparos em tempo real</p>
                 </div>
                 
                 <!-- Stats Cards -->
                 <div class="stats-grid">
-                    <div class="stat-card">
+                    <div class="stat-card primary">
                         <div class="stat-header">
                             <div>
                                 <div class="stat-value" id="total-projects">0</div>
                                 <div class="stat-label">Projetos Ativos</div>
                             </div>
                             <div class="stat-icon">
-                                <i class="fas fa-folder"></i>
+                                <i class="fas fa-folder-open"></i>
                             </div>
                         </div>
                         <div class="stat-change positive">
-                            <i class="fas fa-arrow-up"></i> 12%
+                            <i class="fas fa-arrow-up"></i> <span id="stat-projects-change">0%</span> vs mês anterior
                         </div>
                     </div>
                     
@@ -116,7 +130,7 @@
                             </div>
                         </div>
                         <div class="stat-change positive">
-                            <i class="fas fa-arrow-up"></i> 8%
+                            <i class="fas fa-arrow-up"></i> <span id="stat-contacts-change">0%</span> esta semana
                         </div>
                     </div>
                     
@@ -130,12 +144,12 @@
                                 <i class="fas fa-clock"></i>
                             </div>
                         </div>
-                        <div class="stat-change negative">
-                            <i class="fas fa-arrow-down"></i> 5%
+                        <div class="stat-change neutral">
+                            <i class="fas fa-minus"></i> Estável
                         </div>
                     </div>
                     
-                    <div class="stat-card danger">
+                    <div class="stat-card success">
                         <div class="stat-header">
                             <div>
                                 <div class="stat-value" id="success-rate">0%</div>
@@ -146,7 +160,7 @@
                             </div>
                         </div>
                         <div class="stat-change positive">
-                            <i class="fas fa-arrow-up"></i> 3%
+                            <i class="fas fa-arrow-up"></i> <span id="stat-success-change">0%</span> de melhoria
                         </div>
                     </div>
                 </div>
@@ -155,10 +169,6 @@
                 <div class="projects-header">
                     <h2 class="section-title">Meus Projetos</h2>
                     <div class="section-actions">
-                        <button class="btn btn-outline">
-                            <i class="fas fa-filter"></i>
-                            <span>Filtrar</span>
-                        </button>
                         <button class="btn btn-outline" onclick="exportarProjetos()">
                             <i class="fas fa-download"></i>
                             <span>Exportar</span>
@@ -169,8 +179,10 @@
                 <div id="projects-list" class="grid-projects"></div>
                 
                 <div id="empty-state" class="empty-state" style="display: none;">
-                    <div class="empty-icon"><i class="fas fa-clipboard-list"></i></div>
-                    <h3>Nenhum projeto criado ainda</h3>
+                    <div class="empty-state-icon">
+                        <i class="fas fa-folder-open"></i>
+                    </div>
+                    <h3>Nenhum projeto encontrado</h3>
                     <p>Comece criando seu primeiro projeto de testes</p>
                     <button class="btn btn-primary" onclick="abrirModalProjeto()">
                         <i class="fas fa-plus"></i>
@@ -179,36 +191,44 @@
                 </div>
             </div>
 
-            <!-- Details Screen -->
+            <!-- Project Details Screen -->
             <div id="screen-details" class="screen">
-                <div class="details-header">
-                    <button class="back-btn" onclick="irParaHome()">
-                        <i class="fas fa-arrow-left"></i>
-                        <span>Voltar</span>
-                    </button>
-                    
-                    <div class="sheet-info">
-                        <div>
-                            <h2 class="sheet-title" id="sheet-title">Nome da Planilha</h2>
-                            <div class="sheet-meta">
-                                <span class="meta-item">
-                                    <i class="fas fa-user"></i>
-                                    <span id="sheet-client"></span>
-                                </span>
-                                <span class="meta-item">
-                                    <i class="fas fa-plug"></i>
-                                    <span id="sheet-platform"></span>
-                                </span>
-                                <span class="meta-item">
-                                    <i class="fas fa-calendar"></i>
-                                    <span id="sheet-date"></span>
-                                </span>
-                            </div>
+                <div class="breadcrumb">
+                    <a href="#" onclick="irParaHome(event)">Dashboard</a>
+                    <i class="fas fa-chevron-right"></i>
+                    <span id="breadcrumb-project">Projeto</span>
+                </div>
+                
+                <div class="project-header">
+                    <div class="project-header-info">
+                        <h1 id="sheet-title">Nome do Projeto</h1>
+                        <div class="project-meta">
+                            <span class="meta-item">
+                                <i class="fas fa-user"></i>
+                                <span id="sheet-client">Cliente</span>
+                            </span>
+                            <span class="meta-item">
+                                <i class="fas fa-server"></i>
+                                <span id="sheet-platform">Plataforma</span>
+                            </span>
+                            <span class="meta-item">
+                                <i class="fas fa-calendar"></i>
+                                <span id="sheet-date">Data</span>
+                            </span>
                         </div>
-                        <div id="save-indicator" class="save-indicator">
-                            <i class="fas fa-check"></i>
-                            <span>Salvo</span>
-                        </div>
+                    </div>
+                    <div class="project-header-actions">
+                        <button class="btn btn-outline" onclick="abrirModalEditarProjeto()">
+                            <i class="fas fa-edit"></i>
+                            <span>Editar</span>
+                        </button>
+                        <button class="btn btn-outline" onclick="testarWebhook()">
+                            <i class="fas fa-flask"></i>
+                            <span>Testar Webhook</span>
+                        </button>
+                        <button class="btn btn-danger" onclick="excluirProjetoAtual()">
+                            <i class="fas fa-trash"></i>
+                        </button>
                     </div>
                 </div>
 
@@ -219,8 +239,11 @@
                             <button class="btn btn-outline btn-icon" onclick="adicionarMultiplasLinhas()" title="Adicionar múltiplas linhas">
                                 <i class="fas fa-layer-group"></i>
                             </button>
-                            <button class="btn btn-outline btn-icon" onclick="importarContatos()" title="Importar contatos">
+                            <button class="btn btn-outline btn-icon" onclick="importarContatos()" title="Importar CSV/Excel">
                                 <i class="fas fa-upload"></i>
+                            </button>
+                            <button class="btn btn-outline btn-icon" onclick="exportarContatos()" title="Exportar contatos">
+                                <i class="fas fa-download"></i>
                             </button>
                             <button class="btn btn-secondary" onclick="executarTestes()">
                                 <i class="fas fa-play"></i>
@@ -228,22 +251,111 @@
                             </button>
                         </div>
                     </div>
-                    <table class="modern-table">
-                        <thead>
-                            <tr>
-                                <th style="width: 25%;">Número (WhatsApp)</th>
-                                <th style="width: 35%;">Nome</th>
-                                <th style="width: 25%;">Data do Disparo</th>
-                                <th style="width: 10%;">Status</th>
-                                <th style="width: 5%;"></th>
-                            </tr>
-                        </thead>
-                        <tbody id="table-body"></tbody>
-                    </table>
+                    
+                    <div class="table-wrapper">
+                        <table class="modern-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 20%;">Número (WhatsApp)</th>
+                                    <th style="width: 25%;">Nome</th>
+                                    <th style="width: 20%;">Data do Disparo</th>
+                                    <th style="width: 15%;">Status</th>
+                                    <th style="width: 15%;">Último Envio</th>
+                                    <th style="width: 5%;"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="table-body"></tbody>
+                        </table>
+                    </div>
+                    
                     <button class="add-row-btn" onclick="adicionarLinhaVazia()">
                         <i class="fas fa-plus"></i>
                         <span>Adicionar nova linha</span>
                     </button>
+                </div>
+            </div>
+
+            <!-- History Screen -->
+            <div id="screen-history" class="screen">
+                <div class="dashboard-header">
+                    <h1 class="dashboard-title">Histórico de Disparos</h1>
+                    <p class="dashboard-subtitle">Visualize todos os disparos realizados</p>
+                </div>
+                
+                <div class="history-filters">
+                    <select id="history-project-filter" class="filter-select" onchange="filtrarHistorico()">
+                        <option value="">Todos os projetos</option>
+                    </select>
+                    <select id="history-status-filter" class="filter-select" onchange="filtrarHistorico()">
+                        <option value="">Todos os status</option>
+                        <option value="sucesso">Sucesso</option>
+                        <option value="erro">Erro</option>
+                    </select>
+                    <input type="date" id="history-date-filter" class="filter-select" onchange="filtrarHistorico()">
+                </div>
+                
+                <div id="history-list" class="history-list"></div>
+                
+                <div id="history-empty" class="empty-state" style="display: none;">
+                    <div class="empty-state-icon">
+                        <i class="fas fa-history"></i>
+                    </div>
+                    <h3>Nenhum histórico encontrado</h3>
+                    <p>Execute alguns testes para ver o histórico aqui</p>
+                </div>
+            </div>
+
+            <!-- Reports Screen -->
+            <div id="screen-reports" class="screen">
+                <div class="dashboard-header">
+                    <h1 class="dashboard-title">Relatórios e Análises</h1>
+                    <p class="dashboard-subtitle">Insights detalhados sobre seus testes</p>
+                </div>
+                
+                <div class="reports-grid">
+                    <div class="report-card">
+                        <div class="report-header">
+                            <h3><i class="fas fa-chart-pie"></i> Distribuição por Plataforma</h3>
+                        </div>
+                        <div id="platform-chart" class="chart-container"></div>
+                    </div>
+                    
+                    <div class="report-card">
+                        <div class="report-header">
+                            <h3><i class="fas fa-chart-bar"></i> Taxa de Sucesso</h3>
+                        </div>
+                        <div id="success-chart" class="chart-container"></div>
+                    </div>
+                    
+                    <div class="report-card full-width">
+                        <div class="report-header">
+                            <h3><i class="fas fa-table"></i> Resumo por Projeto</h3>
+                        </div>
+                        <div id="summary-table" class="chart-container"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Templates Screen -->
+            <div id="screen-templates" class="screen">
+                <div class="dashboard-header">
+                    <h1 class="dashboard-title">Templates de Payload</h1>
+                    <p class="dashboard-subtitle">Salve e reutilize configurações de payload</p>
+                </div>
+                
+                <button class="btn btn-primary" onclick="abrirModalTemplate()" style="margin-bottom: 24px;">
+                    <i class="fas fa-plus"></i>
+                    <span>Novo Template</span>
+                </button>
+                
+                <div id="templates-list" class="templates-grid"></div>
+                
+                <div id="templates-empty" class="empty-state" style="display: none;">
+                    <div class="empty-state-icon">
+                        <i class="fas fa-file-alt"></i>
+                    </div>
+                    <h3>Nenhum template salvo</h3>
+                    <p>Crie templates para reutilizar configurações de payload</p>
                 </div>
             </div>
 
@@ -260,21 +372,21 @@
                         <div class="settings-item">
                             <span>Notificações por email</span>
                             <label class="toggle-switch">
-                                <input type="checkbox" checked>
+                                <input type="checkbox" id="email-notifications" onchange="salvarConfiguracoes()">
                                 <span class="slider"></span>
                             </label>
                         </div>
                         <div class="settings-item">
-                            <span>Alertas de teste</span>
+                            <span>Alertas de teste concluído</span>
                             <label class="toggle-switch">
-                                <input type="checkbox" checked>
+                                <input type="checkbox" id="test-alerts" onchange="salvarConfiguracoes()">
                                 <span class="slider"></span>
                             </label>
                         </div>
                         <div class="settings-item">
                             <span>Notificações de erro</span>
                             <label class="toggle-switch">
-                                <input type="checkbox" checked>
+                                <input type="checkbox" id="error-notifications" onchange="salvarConfiguracoes()">
                                 <span class="slider"></span>
                             </label>
                         </div>
@@ -285,30 +397,48 @@
                         <div class="settings-item">
                             <span>Tema escuro</span>
                             <label class="toggle-switch">
-                                <input type="checkbox" id="dark-mode-toggle">
+                                <input type="checkbox" id="dark-mode-toggle" onchange="toggleDarkMode()">
                                 <span class="slider"></span>
                             </label>
                         </div>
                         <div class="settings-item">
-                            <span>Modo compacto</span>
+                            <span>Animações</span>
                             <label class="toggle-switch">
-                                <input type="checkbox">
+                                <input type="checkbox" id="animations-toggle" checked onchange="salvarConfiguracoes()">
                                 <span class="slider"></span>
                             </label>
                         </div>
                     </div>
                     
                     <div class="settings-card">
+                        <h3><i class="fas fa-shield-alt"></i> Segurança</h3>
+                        <div class="settings-item">
+                            <span>Confirmação antes de disparos</span>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="confirm-dispatch" checked onchange="salvarConfiguracoes()">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="settings-item">
+                            <div>
+                                <span>Delay entre disparos (ms)</span>
+                                <small class="field-hint">Padrão: 500ms</small>
+                            </div>
+                            <input type="number" id="dispatch-delay" value="500" min="100" max="5000" style="width: 100px;" onchange="salvarConfiguracoes()">
+                        </div>
+                    </div>
+                    
+                    <div class="settings-card">
                         <h3><i class="fas fa-database"></i> Dados</h3>
-                        <button class="btn btn-outline" style="width: 100%; margin-bottom: 12px;">
+                        <button class="btn btn-outline" style="width: 100%; margin-bottom: 12px;" onclick="exportarTodosDados()">
                             <i class="fas fa-download"></i>
                             <span>Exportar todos os dados</span>
                         </button>
-                        <button class="btn btn-outline" style="width: 100%; margin-bottom: 12px;">
+                        <button class="btn btn-outline" style="width: 100%; margin-bottom: 12px;" onclick="importarDados()">
                             <i class="fas fa-upload"></i>
                             <span>Importar dados</span>
                         </button>
-                        <button class="btn btn-outline" style="width: 100%; background: #fee2e2; color: var(--danger);">
+                        <button class="btn btn-outline" style="width: 100%; background: #fee2e2; color: var(--danger);" onclick="limparTodosDados()">
                             <i class="fas fa-trash"></i>
                             <span>Limpar todos os dados</span>
                         </button>
@@ -318,11 +448,11 @@
         </div>
     </div>
 
-    <!-- Modal Novo Projeto -->
+    <!-- Modal Novo/Editar Projeto -->
     <div id="modal-projeto" class="modal-overlay">
         <div class="modal-box">
             <div class="modal-header">
-                <h3>Configurar Novo Projeto</h3>
+                <h3 id="modal-projeto-titulo">Configurar Novo Projeto</h3>
                 <button class="btn btn-icon" onclick="fecharModal()">
                     <i class="fas fa-times"></i>
                 </button>
@@ -331,16 +461,18 @@
                 <div class="modal-body">
                     <div class="form-grid">
                         <div>
-                            <label>Nome do Projeto</label>
+                            <label>Nome do Projeto *</label>
                             <input type="text" id="p-nome" placeholder="Ex: Campanha Fevereiro 2026" required>
+                            <small class="field-hint">Nome descritivo para identificar o projeto</small>
                         </div>
+                        
                         <div class="form-row">
                             <div>
-                                <label>Cliente</label>
+                                <label>Cliente *</label>
                                 <input type="text" id="p-cliente" placeholder="Nome do cliente" required>
                             </div>
                             <div>
-                                <label>Plataforma</label>
+                                <label>Plataforma *</label>
                                 <select id="p-plataforma" required>
                                     <option value="">Selecione...</option>
                                     <option value="chatwoot">Chatwoot</option>
@@ -350,20 +482,29 @@
                                 </select>
                             </div>
                         </div>
+                        
                         <div class="form-row">
                             <div>
-                                <label>Account ID</label>
+                                <label>Account ID *</label>
                                 <input type="text" id="p-account" placeholder="Ex: ACC-12345" required>
                             </div>
                             <div>
-                                <label>Inbox ID</label>
+                                <label>Inbox ID *</label>
                                 <input type="text" id="p-inbox" placeholder="Ex: INBOX-98765" required>
                             </div>
                         </div>
+                        
                         <div>
-                            <label>Webhook URL</label>
-                            <input type="url" id="p-webhook" placeholder="https://api.exemplo.com/webhook" required>
+                            <label>Webhook URL *</label>
+                            <input type="url" id="p-webhook" placeholder="https://api.exemplo.com/webhook" required pattern="https://.*">
+                            <small class="field-hint">URL deve começar com https://</small>
                         </div>
+                        
+                        <div>
+                            <label>Tags (separadas por vírgula)</label>
+                            <input type="text" id="p-tags" placeholder="produção, cliente-premium, urgente">
+                        </div>
+                        
                         <div>
                             <label>Descrição do Projeto (Opcional)</label>
                             <textarea id="p-descricao" rows="3" placeholder="Descreva o objetivo deste projeto de testes..."></textarea>
@@ -372,15 +513,133 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">Criar Projeto</button>
+                    <button type="submit" class="btn btn-primary" id="btn-salvar-projeto">
+                        <i class="fas fa-check"></i>
+                        <span>Criar Projeto</span>
+                    </button>
                 </div>
             </form>
         </div>
     </div>
 
+    <!-- Modal Confirmar Execução -->
+    <div id="modal-confirmar" class="modal-overlay">
+        <div class="modal-box modal-confirm">
+            <div class="modal-header">
+                <h3>Confirmar Execução de Testes</h3>
+                <button class="btn btn-icon" onclick="fecharModalConfirmar()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="confirm-icon">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </div>
+                <p class="confirm-message">Você está prestes a executar testes para:</p>
+                <div class="confirm-stats">
+                    <div class="confirm-stat">
+                        <strong id="confirm-total">0</strong>
+                        <span>Contatos Total</span>
+                    </div>
+                    <div class="confirm-stat">
+                        <strong id="confirm-valid">0</strong>
+                        <span>Contatos Válidos</span>
+                    </div>
+                </div>
+                <p class="confirm-warning">
+                    <i class="fas fa-info-circle"></i>
+                    Os disparos serão enviados para o webhook configurado.
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="fecharModalConfirmar()">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="confirmarExecucao()">
+                    <i class="fas fa-paper-plane"></i>
+                    <span>Confirmar e Executar</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Progresso -->
+    <div id="modal-progress" class="modal-overlay">
+        <div class="modal-box modal-progress">
+            <div class="modal-header">
+                <h3>Executando Testes...</h3>
+            </div>
+            <div class="modal-body">
+                <div class="progress-container">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progress-fill"></div>
+                    </div>
+                    <div class="progress-text">
+                        <span id="progress-current">0</span> / <span id="progress-total">0</span> contatos
+                    </div>
+                </div>
+                <div class="progress-stats">
+                    <div class="progress-stat success">
+                        <i class="fas fa-check-circle"></i>
+                        <span id="progress-success">0</span> Sucessos
+                    </div>
+                    <div class="progress-stat error">
+                        <i class="fas fa-times-circle"></i>
+                        <span id="progress-errors">0</span> Erros
+                    </div>
+                </div>
+                <div id="progress-log" class="progress-log"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="fecharModalProgress()" id="btn-close-progress" style="display: none;">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Template -->
+    <div id="modal-template" class="modal-overlay">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h3>Novo Template de Payload</h3>
+                <button class="btn btn-icon" onclick="fecharModalTemplate()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form onsubmit="salvarTemplate(event)">
+                <div class="modal-body">
+                    <div class="form-grid">
+                        <div>
+                            <label>Nome do Template *</label>
+                            <input type="text" id="t-nome" placeholder="Ex: Payload Padrão Chatwoot" required>
+                        </div>
+                        <div>
+                            <label>Descrição</label>
+                            <textarea id="t-descricao" rows="2" placeholder="Descrição do template..."></textarea>
+                        </div>
+                        <div>
+                            <label>Configuração JSON *</label>
+                            <textarea id="t-config" rows="10" placeholder='{"campo": "valor"}' required class="code-input"></textarea>
+                            <small class="field-hint">JSON válido com a estrutura do payload</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" onclick="fecharModalTemplate()">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i>
+                        <span>Salvar Template</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- File Input Hidden -->
+    <input type="file" id="import-file" accept=".csv,.xlsx,.xls" style="display: none;" onchange="processarImportacao(event)">
+    <input type="file" id="import-data-file" accept=".json" style="display: none;" onchange="processarImportacaoDados(event)">
+
     <!-- Toast Container -->
     <div class="toast-container" id="toast-container"></div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
